@@ -6,8 +6,8 @@ const nextConfig = {
       {
         source: '/:path*',
         headers: [
-          // Allow embedding in HubSpot dashboards
-          { key: 'Content-Security-Policy', value: "frame-ancestors 'self' https://*.hubspot.com https://*.hubspotusercontent.com" },
+          // Allow embedding in iframes from any origin
+          { key: 'Content-Security-Policy', value: "frame-ancestors *" },
         ],
       },
     ];
