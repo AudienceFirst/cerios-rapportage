@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { Suspense, useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { MRRChart } from "@/components/MRRChart";
 import { BusinessUnitSelector } from "@/components/BusinessUnitSelector";
 import type { BusinessUnit } from "@/lib/types";
 import type { MRRDataPoint } from "@/lib/types";
 
-export default function Home() {
+function DashboardContent() {
   const searchParams = useSearchParams();
   const accessKey = useMemo(() => searchParams.get("key"), [searchParams]);
 
@@ -99,5 +99,19 @@ export default function Home() {
         </footer>
       </div>
     </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-slate-50 flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+        </main>
+      }
+    >
+      <DashboardContent />
+    </Suspense>
   );
 }
