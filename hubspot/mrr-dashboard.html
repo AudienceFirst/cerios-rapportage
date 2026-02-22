@@ -1,0 +1,206 @@
+<!--
+  MRR Dashboard - Paste this into a HubSpot Custom HTML module.
+  The API URL uses the current page's origin, so the page must be on the same domain as /hs/serverless/mrr
+-->
+<div id="mrr-dashboard-root" class="mrr-dashboard">
+  <header class="mrr-header">
+    <h1 class="mrr-title">Monthly Recurring Revenue</h1>
+    <p class="mrr-subtitle">MRR by Business Unit · HubSpot CRM</p>
+  </header>
+
+  <section class="mrr-controls">
+    <div class="mrr-tabs">
+      <button data-unit="testmonitor" class="mrr-tab active">Testmonitor</button>
+      <button data-unit="omnext" class="mrr-tab">Omnext</button>
+      <button data-unit="josf" class="mrr-tab">JOSF</button>
+      <button data-unit="supportbook" class="mrr-tab">Supportbook</button>
+    </div>
+    <div class="mrr-summary">
+      <div><span class="mrr-label">Latest</span><span id="mrr-latest" class="mrr-value">—</span></div>
+      <div><span class="mrr-label">Goal</span><span class="mrr-value mrr-goal">$1,600</span></div>
+    </div>
+  </section>
+
+  <section class="mrr-chart-section">
+    <div class="mrr-chart-wrap"><canvas id="mrr-chart"></canvas></div>
+    <div id="mrr-loading" class="mrr-loading">
+      <div class="mrr-spinner"></div>
+      <p>Loading from HubSpot…</p>
+    </div>
+    <div id="mrr-error" class="mrr-error hidden"></div>
+  </section>
+
+  <footer class="mrr-footer">HubSpot dashboard · Refreshes on load</footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+  var MRR_API_BASE = window.location.origin + '/hs/serverless/mrr';
+  var GOAL = 1600;
+  var chartInstance = null;
+
+  function formatCurrency(n) {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n);
+  }
+
+  function renderChart(_container, data, loading, error) {
+    var loadingEl = document.getElementById('mrr-loading');
+    var errorEl = document.getElementById('mrr-error');
+    var canvas = document.getElementById('mrr-chart');
+
+    if (error) {
+      loadingEl.classList.add('hidden');
+      errorEl.classList.remove('hidden');
+      errorEl.textContent = error;
+      if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+      return;
+    }
+    if (loading || !data || data.length === 0) {
+      loadingEl.classList.remove('hidden');
+      errorEl.classList.add('hidden');
+      if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+      return;
+    }
+
+    loadingEl.classList.add('hidden');
+    errorEl.classList.add('hidden');
+
+    var labels = data.map(function(d) { return d.month; });
+    var closedData = data.map(function(d) { return d.closedDeals; });
+    var openData = data.map(function(d) { return d.openDeals; });
+
+    if (chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          { label: 'Closed', data: closedData, backgroundColor: '#2563eb', stack: 'mrr' },
+          { label: 'Open', data: openData, backgroundColor: '#7dd3fc', stack: 'mrr' }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { font: { size: 12 } } },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) { return ctx.dataset.label + ': ' + formatCurrency(ctx.raw); }
+            }
+          }
+        },
+        scales: {
+          x: { ticks: { maxRotation: 40, font: { size: 11 } } },
+          y: {
+            stacked: true,
+            suggestedMax: Math.max(GOAL, Math.max.apply(null, data.map(function(d) { return d.total; })) * 1.15),
+            ticks: { callback: function(v) { return formatCurrency(v); } }
+          }
+        }
+      },
+      plugins: [{
+        id: 'goalLine',
+        afterDraw: function(chart) {
+          var ctx = chart.ctx;
+          var yAxis = chart.scales.y;
+          var y = yAxis.getPixelForValue(GOAL);
+          if (y >= yAxis.top && y <= yAxis.bottom) {
+            ctx.save();
+            ctx.strokeStyle = '#16a34a';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.beginPath();
+            ctx.moveTo(chart.chartArea.left, y);
+            ctx.lineTo(chart.chartArea.right, y);
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+      }]
+    });
+  }
+
+  function fetchMRR(unit, cb) {
+    fetch(MRR_API_BASE + '?businessUnit=' + encodeURIComponent(unit))
+      .then(function(r) {
+        if (!r.ok) return r.json().then(function(j) { throw new Error(j.error || 'Request failed'); });
+        return r.json();
+      })
+      .then(function(json) {
+        var data = json.data || (json.body && json.body.data) || [];
+        cb(json.error ? new Error(json.error) : null, data);
+      })
+      .catch(function(err) { cb(err, []); });
+  }
+
+  function init() {
+    var currentUnit = 'testmonitor';
+    var loadingEl = document.getElementById('mrr-loading');
+    var errorEl = document.getElementById('mrr-error');
+    var chartEl = document.getElementById('mrr-chart');
+    var latestEl = document.getElementById('mrr-latest');
+
+    document.querySelectorAll('.mrr-tab').forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        var unit = tab.getAttribute('data-unit');
+        if (unit === currentUnit) return;
+        currentUnit = unit;
+        document.querySelectorAll('.mrr-tab').forEach(function(t) { t.classList.remove('active'); });
+        tab.classList.add('active');
+        load();
+      });
+    });
+
+    function load() {
+      loadingEl.classList.remove('hidden');
+      errorEl.classList.add('hidden');
+      latestEl.textContent = '—';
+      renderChart(chartEl, [], true, null);
+
+      fetchMRR(currentUnit, function(err, data) {
+        if (err) {
+          renderChart(chartEl, [], false, err.message);
+        } else {
+          var latest = data.length ? data[data.length - 1].total : null;
+          latestEl.textContent = latest != null ? formatCurrency(latest) : '—';
+          renderChart(chartEl, data, false, null);
+        }
+      });
+    }
+
+    load();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+
+<style>
+.mrr-dashboard { font-family: system-ui, -apple-system, sans-serif; max-width: 900px; margin: 0 auto; padding: 24px; background: #f8fafc; }
+.mrr-header { margin-bottom: 24px; }
+.mrr-title { font-size: 1.25rem; font-weight: 600; color: #0f172a; margin: 0; }
+.mrr-subtitle { font-size: 0.875rem; color: #64748b; margin: 4px 0 0; }
+.mrr-controls { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 24px; }
+.mrr-tabs { display: flex; gap: 4px; }
+.mrr-tab { padding: 6px 12px; font-size: 0.875rem; font-weight: 500; border-radius: 6px; border: 1px solid #e2e8f0; background: #fff; color: #64748b; cursor: pointer; }
+.mrr-tab:hover { background: #f8fafc; border-color: #cbd5e1; }
+.mrr-tab.active { background: #0f172a; color: #fff; border-color: #0f172a; }
+.mrr-summary { display: flex; gap: 24px; font-size: 0.875rem; }
+.mrr-label { display: block; color: #64748b; }
+.mrr-value { font-weight: 600; color: #0f172a; }
+.mrr-goal { color: #16a34a; }
+.mrr-chart-section { background: #fff; border-radius: 8px; border: 1px solid #e2e8f0; padding: 24px; position: relative; min-height: 420px; }
+.mrr-chart-wrap { height: 380px; position: relative; }
+.mrr-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; position: absolute; inset: 0; min-height: 380px; gap: 12px; color: #64748b; font-size: 0.875rem; }
+.mrr-loading.hidden, .mrr-error.hidden { display: none !important; }
+.mrr-error { padding: 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; color: #b91c1c; font-size: 0.875rem; margin-top: 12px; }
+.mrr-spinner { width: 32px; height: 32px; border: 2px solid #e2e8f0; border-top-color: #64748b; border-radius: 50%; animation: mrr-spin 0.8s linear infinite; }
+.mrr-footer { margin-top: 24px; text-align: center; font-size: 11px; color: #94a3b8; }
+@keyframes mrr-spin { to { transform: rotate(360deg); } }
+</style>

@@ -1,24 +1,29 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { MRRChart } from "@/components/MRRChart";
 import { BusinessUnitSelector } from "@/components/BusinessUnitSelector";
 import type { BusinessUnit } from "@/lib/types";
 import type { MRRDataPoint } from "@/lib/types";
 
 export default function Home() {
+  const searchParams = useSearchParams();
+  const accessKey = useMemo(() => searchParams.get("key"), [searchParams]);
+
   const [businessUnit, setBusinessUnit] = useState<BusinessUnit>("testmonitor");
   const [data, setData] = useState<MRRDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchMRR = useCallback(async (unit: BusinessUnit) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(
-        `/api/mrr?businessUnit=${encodeURIComponent(unit)}`
-      );
+  const fetchMRR = useCallback(
+    async (unit: BusinessUnit) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams({ businessUnit: unit });
+        if (accessKey) params.set("key", accessKey);
+        const res = await fetch(`/api/mrr?${params.toString()}`);
       const json = await res.json();
 
       if (!res.ok) {
@@ -32,7 +37,9 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  },
+    [accessKey]
+  );
 
   useEffect(() => {
     fetchMRR(businessUnit);

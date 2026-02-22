@@ -1,0 +1,12 @@
+{
+  "appFunctions": {
+    "mrr": {
+      "file": "mrr.js",
+      "secrets": [],
+      "endpoint": {
+        "path": "mrr",
+        "method": ["GET"]
+      }
+    }
+  }
+}

@@ -65,3 +65,7 @@ Open [http://localhost:3000](http://localhost:3000).
 ## Embedding in HubSpot
 
 Deploy the app and add an iframe to your HubSpot dashboard pointing to your deployed URL. The app sends headers to allow embedding in HubSpot domains.
+
+## Hosting Inside HubSpot (Alternative)
+
+The `hubspot/` folder contains a version that runs entirely within HubSpot using Serverless Functions and a static HTML frontend. This requires **Content Hub Enterprise** and platform version **2025.1**. See `hubspot/README.md` for deployment instructions.

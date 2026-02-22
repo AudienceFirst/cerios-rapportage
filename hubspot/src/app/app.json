@@ -1,0 +1,10 @@
+{
+  "name": "Cerios MRR Dashboard",
+  "description": "MRR dashboard with HubSpot CRM integration - fetches deals, line items, and calculates Monthly Recurring Revenue.",
+  "scopes": [
+    "crm.objects.deals.read",
+    "crm.objects.line_items.read"
+  ],
+  "uid": "cerios-mrr-dashboard",
+  "public": false
+}
